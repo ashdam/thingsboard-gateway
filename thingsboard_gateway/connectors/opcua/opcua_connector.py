@@ -17,9 +17,9 @@ import re
 from random import choice
 from string import ascii_lowercase
 from threading import Thread
-from time import sleep, monotonic
+from time import sleep, monotonic, perf_counter
 from queue import Queue
-
+import datetime
 from thingsboard_gateway.connectors.connector import Connector
 from thingsboard_gateway.connectors.opcua.backward_compatibility_adapter import BackwardCompatibilityAdapter
 from thingsboard_gateway.connectors.opcua.device import Device
@@ -102,6 +102,7 @@ class OpcUaConnector(Connector, Thread):
         self.daemon = True
 
         self.__device_nodes = []
+        self.__all_nodes = []
         self.__last_poll = 0
 
     def open(self):
@@ -118,7 +119,7 @@ class OpcUaConnector(Connector, Thread):
         self.__log.info("Stopping OPC-UA Connector")
 
         asyncio.run_coroutine_threadsafe(self.__cancel_all_tasks(), self.__loop)
-
+        
         asyncio.run(self.__disconnect())
 
         start_time = monotonic()
@@ -225,9 +226,11 @@ class OpcUaConnector(Connector, Thread):
                     self.__log.error("Error on loading type definitions:\n %s", e)
 
                 scan_period = self.__server_conf.get('scanPeriodInMillis', 5000) / 1000
+                await self.__scan_device_nodes()
+                await self.__get_nodes()
                 while not self.__stopped:
                     if monotonic() - self.__last_poll >= scan_period:
-                        await self.__scan_device_nodes()
+                        await self.__poll_nodes_2()
                         await self.__poll_nodes()
                         self.__last_poll = monotonic()
 
@@ -424,6 +427,35 @@ class OpcUaConnector(Connector, Thread):
                                     device.converter_for_sub.clear_data()
             else:
                 sleep(.2)
+
+
+    # async get nodes -> List[Node]
+    async def __get_nodes(self):
+        nodes = []
+        for device in self.__device_nodes:
+            for section in ('attributes', 'timeseries'):
+                for node in device.values.get(section, []):
+                    path = node.get('qualified_path', node['path'])
+                    if isinstance(path, str) and re.match(r"(ns=\d+;[isgb]=[^}]+)", path):
+                        var = self.__client.get_node(path)
+                        nodes.append(var)
+        
+        print(f"Num Nodes: {len(nodes)}")
+        self.__all_nodes = nodes
+
+    
+    async def __poll_nodes_2(self):
+        try:
+            tic = perf_counter()
+            values = await self.__client.read_values(self.__all_nodes)
+            toc = perf_counter()
+
+            print(f"Num values: {len(values)}")
+
+            with open('logs.txt', 'w') as f:
+                f.write(f"Num values: {len(values)} - Time: {datetime.datetime.now()} - Duration: {(toc - tic)/1000} milliseconds")
+        except Exception as e:
+            print(f"Error found polling: {str(e)}")
 
     async def __poll_nodes(self):
         for device in self.__device_nodes:
