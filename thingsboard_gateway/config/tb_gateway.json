@@ -1,12 +1,12 @@
 {
   "thingsboard": {
-    "host": "thingsboard.cloud",
+    "host": "thingsboard.horseit.tech",
     "port": 1883,
     "remoteShell": false,
     "remoteConfiguration": true,
     "statistics": {
       "enable": true,
-      "statsSendPeriodInSeconds": 600
+      "statsSendPeriodInSeconds": 60
     },
     "deviceFiltering": {
       "enable": false,
@@ -19,7 +19,7 @@
     "handleDeviceRenaming": true,
     "security": {
       "type": "accessToken",
-      "accessToken": "YOUR_ACCESS_TOKEN"
+      "accessToken": "INXedhwLtC2tEYfDz190"
     },
     "qos": 1,
     "checkingDeviceActivity": {
