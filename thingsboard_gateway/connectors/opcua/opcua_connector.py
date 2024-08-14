@@ -17,7 +17,7 @@ import re
 from random import choice
 from string import ascii_lowercase
 from threading import Thread
-from time import sleep, monotonic, perf_counter
+from time import sleep, monotonic, time
 from queue import Queue
 import datetime
 from thingsboard_gateway.connectors.connector import Connector
@@ -119,7 +119,7 @@ class OpcUaConnector(Connector, Thread):
         self.__log.info("Stopping OPC-UA Connector")
 
         asyncio.run_coroutine_threadsafe(self.__cancel_all_tasks(), self.__loop)
-        
+
         asyncio.run(self.__disconnect())
 
         start_time = monotonic()
@@ -231,7 +231,6 @@ class OpcUaConnector(Connector, Thread):
                 while not self.__stopped:
                     if monotonic() - self.__last_poll >= scan_period:
                         await self.__poll_nodes_2()
-                        await self.__poll_nodes()
                         self.__last_poll = monotonic()
 
                     if not scan_period < 0.2:
@@ -446,14 +445,15 @@ class OpcUaConnector(Connector, Thread):
     
     async def __poll_nodes_2(self):
         try:
-            tic = perf_counter()
+            tic = time()*1000
             values = await self.__client.read_values(self.__all_nodes)
-            toc = perf_counter()
+            toc = time()*1000
 
             print(f"Num values: {len(values)}")
 
-            with open('logs.txt', 'w') as f:
-                f.write(f"Num values: {len(values)} - Time: {datetime.datetime.now()} - Duration: {(toc - tic)/1000} milliseconds")
+            # logging purpose
+            with open('logs.txt', 'a') as f:
+                f.write(f"Num values: {len(values)} - Time: {datetime.datetime.now()} - Duration: {(toc - tic)} milliseconds\n")
         except Exception as e:
             print(f"Error found polling: {str(e)}")
 
